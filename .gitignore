@@ -1,0 +1,14 @@
+node_modules
+coverage
+coverage-reports
+*.swp
+*.swo
+*.spect.count
+*.spec
+npm-debug.log
+.ignore
+.DS_STORE
+
+# IDE
+.vscode
+.idea
