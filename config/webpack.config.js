@@ -10,6 +10,7 @@ const InlineChunkHtmlPlugin = require('react-dev-utils/InlineChunkHtmlPlugin');
 const TerserPlugin = require('terser-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
+const CopyWebpackPlugin = require('copy-webpack-plugin');
 const { WebpackManifestPlugin } = require('webpack-manifest-plugin');
 const InterpolateHtmlPlugin = require('react-dev-utils/InterpolateHtmlPlugin');
 const WorkboxWebpackPlugin = require('workbox-webpack-plugin');
@@ -85,6 +86,12 @@ const hasJsxRuntime = (() => {
   }
 })();
 
+// Get or Set the Cesium ENV variables
+const CESIUM_BASE_URL = process.env.CESIUM_BASE_URL || '';
+const DEBUG_CESIUM = process.env.DEBUG_CESIUM || false;
+const CESIUM_BUILD_PATH = path.posix.join(paths.cesiumBuildRootPath, 'Cesium');
+
+
 // This is the production and development configuration.
 // It is focused on developer experience, fast rebuilds, and a minimal bundle.
 module.exports = function (webpackEnv) {
@@ -103,6 +110,9 @@ module.exports = function (webpackEnv) {
   const env = getClientEnvironment(paths.publicUrlOrPath.slice(0, -1));
 
   const shouldUseReactRefresh = env.raw.FAST_REFRESH;
+
+  // For Client Performance, only use unminified Cesium when on development and explicitely set.
+  const shouldUseCesiumMinified = isEnvDevelopment && DEBUG_CESIUM;
 
   // common function to get style loaders
   const getStyleLoaders = (cssOptions, preProcessor) => {
@@ -320,6 +330,33 @@ module.exports = function (webpackEnv) {
         }),
         ...(modules.webpackAliases || {}),
       },
+      // Webpack 5 Removed these polyfills. Adding them back in to restore webpack4 support.
+      fallback: {
+        fs: false,
+        assert: require.resolve('assert'),
+        buffer: require.resolve('buffer'),
+        console: require.resolve('console-browserify'),
+        constants: require.resolve('constants-browserify'),
+        crypto: require.resolve('crypto-browserify'),
+        domain: require.resolve('domain-browser'),
+        events: require.resolve('events'),
+        http: require.resolve('stream-http'),
+        https: require.resolve('https-browserify'),
+        os: require.resolve('os-browserify/browser'),
+        path: require.resolve('path-browserify'),
+        punycode: require.resolve('punycode'),
+        process: require.resolve('process/browser'),
+        querystring: require.resolve('querystring-es3'),
+        stream: require.resolve('stream-browserify'),
+        string_decoder: require.resolve('string_decoder'),
+        sys: require.resolve('util'),
+        timers: require.resolve('timers-browserify'),
+        tty: require.resolve('tty-browserify'),
+        url: require.resolve('url'),
+        util: require.resolve('util'),
+        vm: require.resolve('vm-browserify'),
+        zlib: require.resolve('browserify-zlib'),
+      },
       plugins: [
         // Prevents users from importing files from outside of src/ (or node_modules/).
         // This often causes confusion because we only process files within src/ with babel.
@@ -339,6 +376,21 @@ module.exports = function (webpackEnv) {
     module: {
       strictExportPresence: true,
       rules: [
+        // CESIUM JS webpack guide recommended adding this plugin when processing cesium.
+        {
+          test: {
+              and: [
+                  paths.cesium,
+                  /\.js$/,
+              ]
+          },
+          loader: 'strip-pragma-loader',
+          options: {
+            pragmas: {
+              debug: isEnvDevelopment,
+            }
+          }
+        },
         // Handle node_modules packages that contain sourcemaps
         shouldUseSourceMap && {
           enforce: 'pre',
@@ -747,6 +799,20 @@ module.exports = function (webpackEnv) {
             },
           },
         }),
+        //
+        // CESIUM JS Overrides
+        //
+        new CopyWebpackPlugin({
+          patterns: [
+              { from: path.join(paths.cesiumBuildRootPath, shouldUseCesiumMinified ? "CesiumUnminified/Cesium.js" : "Cesium/Cesium.js"), to: path.join(paths.appBuild, 'cesium/Cesium.js')},
+              { from: path.join(CESIUM_BUILD_PATH, 'Assets'), to: path.join(paths.appBuild, 'cesium/Assets')},
+              { from: path.join(CESIUM_BUILD_PATH, 'ThirdParty'), to: path.join(paths.appBuild, 'cesium/ThirdParty')},
+              { from: path.join(CESIUM_BUILD_PATH, 'Workers'), to: path.join(paths.appBuild, 'cesium/Workers')},
+              { from: path.join(CESIUM_BUILD_PATH, 'Widgets'), to: path.join(paths.appBuild, 'cesium/Widgets')}
+          ]
+      }),
+      // Define relative base path in cesium for loading assets
+      new webpack.DefinePlugin({ CESIUM_BASE_URL }),
     ].filter(Boolean),
     // Turn off performance processing because we utilize
     // our own hints via the FileSizeReporter
