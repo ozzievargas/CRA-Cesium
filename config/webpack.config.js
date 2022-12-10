@@ -26,6 +26,7 @@ const ForkTsCheckerWebpackPlugin =
     ? require('react-dev-utils/ForkTsCheckerWarningWebpackPlugin')
     : require('react-dev-utils/ForkTsCheckerWebpackPlugin');
 const ReactRefreshWebpackPlugin = require('@pmmmwh/react-refresh-webpack-plugin');
+const HtmlWebpackTagsPlugin = require("html-webpack-tags-plugin");
 
 const createEnvironmentHash = require('./webpack/persistentCache/createEnvironmentHash');
 
@@ -255,6 +256,7 @@ module.exports = function (webpackEnv) {
     infrastructureLogging: {
       level: 'none',
     },
+    ignoreWarnings: [/Failed to parse source map/],
     optimization: {
       minimize: isEnvProduction,
       minimizer: [
@@ -329,6 +331,8 @@ module.exports = function (webpackEnv) {
           'scheduler/tracing': 'scheduler/tracing-profiling',
         }),
         ...(modules.webpackAliases || {}),
+        // 'cesium$': 'cesium/Cesium',
+        'cesiumSource': 'cesium/Source',
       },
       // Webpack 5 Removed these polyfills. Adding them back in to restore webpack4 support.
       fallback: {
@@ -641,6 +645,24 @@ module.exports = function (webpackEnv) {
             : undefined
         )
       ),
+        //
+        // CESIUM JS Overrides
+        //
+        // Define relative base path in cesium for loading assets
+        new webpack.DefinePlugin({ 'CESIUM_BASE_URL': JSON.stringify(CESIUM_BASE_URL) }),
+        new CopyWebpackPlugin({
+          patterns: [
+              { from: path.join(paths.cesiumBuildRootPath, shouldUseCesiumMinified ? "CesiumUnminified/Cesium.js" : "Cesium/Cesium.js"), to: path.join(paths.appBuild, 'cesium/Cesium.js')},
+              { from: path.join(CESIUM_BUILD_PATH, 'Assets'), to: path.join(paths.appBuild, 'cesium/Assets')},
+              { from: path.join(CESIUM_BUILD_PATH, 'ThirdParty'), to: path.join(paths.appBuild, 'cesium/ThirdParty')},
+              { from: path.join(CESIUM_BUILD_PATH, 'Workers'), to: path.join(paths.appBuild, 'cesium/Workers')},
+              { from: path.join(CESIUM_BUILD_PATH, 'Widgets'), to: path.join(paths.appBuild, 'cesium/Widgets')}
+          ]
+      }),
+      new HtmlWebpackTagsPlugin({
+        append: false,
+        tags: [path.join(CESIUM_BASE_URL, "Widgets/widgets.css")],
+      }),
       // Inlines the webpack runtime script. This script is too small to warrant
       // a network request.
       // https://github.com/facebook/create-react-app/issues/5358
@@ -799,20 +821,6 @@ module.exports = function (webpackEnv) {
             },
           },
         }),
-        //
-        // CESIUM JS Overrides
-        //
-        new CopyWebpackPlugin({
-          patterns: [
-              { from: path.join(paths.cesiumBuildRootPath, shouldUseCesiumMinified ? "CesiumUnminified/Cesium.js" : "Cesium/Cesium.js"), to: path.join(paths.appBuild, 'cesium/Cesium.js')},
-              { from: path.join(CESIUM_BUILD_PATH, 'Assets'), to: path.join(paths.appBuild, 'cesium/Assets')},
-              { from: path.join(CESIUM_BUILD_PATH, 'ThirdParty'), to: path.join(paths.appBuild, 'cesium/ThirdParty')},
-              { from: path.join(CESIUM_BUILD_PATH, 'Workers'), to: path.join(paths.appBuild, 'cesium/Workers')},
-              { from: path.join(CESIUM_BUILD_PATH, 'Widgets'), to: path.join(paths.appBuild, 'cesium/Widgets')}
-          ]
-      }),
-      // Define relative base path in cesium for loading assets
-      new webpack.DefinePlugin({ CESIUM_BASE_URL }),
     ].filter(Boolean),
     // Turn off performance processing because we utilize
     // our own hints via the FileSizeReporter

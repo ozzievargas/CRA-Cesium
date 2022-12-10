@@ -8,6 +8,7 @@ coverage-reports
 npm-debug.log
 .ignore
 .DS_STORE
+dist
 
 # IDE
 .vscode
